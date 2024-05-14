@@ -1,0 +1,11 @@
+{
+    "httpMethod": "GET",
+    "path": "/",
+    "headers": {
+        "Content-Type": "application/json"
+    },
+    "queryStringParameters": {
+        "name": "World"
+    },
+    "body": null
+}
