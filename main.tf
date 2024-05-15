@@ -79,48 +79,54 @@ resource "aws_lambda_permission" "api_gw" {
   function_name = aws_lambda_function.add_commitment_function.function_name
   principal     = "apigateway.amazonaws.com"
 
-  // Construct the ARN for the specific method, stage, and resource
-  source_arn = "${aws_api_gateway_rest_api.commitments_api.execution_arn}/${aws_api_gateway_deployment.api_deployment.stage_name}/POST/commitments"
+  // Adjusted source_arn to align specifically with your API Gateway setup
+  source_arn = "${aws_api_gateway_rest_api.commitments_api.execution_arn}/*/*/*"
 }
-
 
 resource "aws_s3_bucket" "functions_bucket" {
   bucket = "ifuller1-bits-functions-bucket"
 }
 
 resource "aws_lambda_function" "add_commitment_function" {
-  depends_on = [null_resource.build_lambda]
-
   function_name = "AddCommitmentFunction"
   handler       = "index.handler"
-  runtime       = "nodejs18.x"
+  runtime       = "nodejs20.x"
   role          = aws_iam_role.lambda_exec.arn
 
   s3_bucket = aws_s3_bucket.functions_bucket.bucket
   s3_key    = "lambda.zip"
 
-  source_code_hash = filemd5("${path.module}/add-commitment-function/src/handler.ts") // naive implementation. better over lockfile and all src
+  source_code_hash = filemd5("${path.module}/add-commitment-function/dist/lambda.zip") // naive implementation. better over lockfile and all src
 }
-
-resource "null_resource" "build_lambda" {
-  provisioner "local-exec" {
-    command     = "npm install && tsc && cd build && zip -X -D -r lambda.zip . && cp lambda.zip ../"
-    working_dir = "${path.module}/add-commitment-function"
-  }
-
-  triggers = {
-    source_hash = filemd5("${path.module}/add-commitment-function/src/handler.ts") // naive implementation. better over lockfile and all src
+# Data source for creating an IAM policy document
+data "aws_iam_policy_document" "dynamodb_policy_doc" {
+  statement {
+    actions   = ["dynamodb:PutItem"]
+    resources = [aws_dynamodb_table.commitments_table.arn]
+    effect    = "Allow"
   }
 }
+
+# Creating an IAM policy based on the policy document
+resource "aws_iam_policy" "lambda_dynamodb_policy" {
+  name   = "LambdaDynamoDBPolicy"
+  policy = data.aws_iam_policy_document.dynamodb_policy_doc.json
+}
+
+# Attach the IAM policy to the lambda_execution_role
+resource "aws_iam_role_policy_attachment" "lambda_dynamodb_attachment" {
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = aws_iam_policy.lambda_dynamodb_policy.arn
+}
+
+
 
 resource "aws_s3_object" "lambda_zip" {
-  depends_on = [null_resource.build_lambda]
-
   bucket = aws_s3_bucket.functions_bucket.bucket
   key    = "lambda.zip"
-  source = "${path.module}/add-commitment-function/lambda.zip"
+  source = "${path.module}/add-commitment-function/dist/lambda.zip"
 
-  etag = filemd5("${path.module}/add-commitment-function/src/handler.ts") // naive implementation. better over lockfile and all src
+  etag = filemd5("${path.module}/add-commitment-function/dist/lambda.zip") // naive implementation. better over lockfile and all src
 }
 
 resource "aws_iam_role" "lambda_exec" {
@@ -148,4 +154,9 @@ output "lambda_function_name" {
 output "api_gateway_endpoint_url" {
   value       = "https://${aws_api_gateway_rest_api.commitments_api.id}.execute-api.${var.region}.amazonaws.com/${aws_api_gateway_deployment.api_deployment.stage_name}/${aws_api_gateway_resource.commitments_resource.path_part}"
   description = "The URL endpoint for the deployed API Gateway."
+}
+
+output "api_gateway_id" {
+  value       = aws_api_gateway_rest_api.commitments_api.id
+  description = "The ID of the API Gateway"
 }
