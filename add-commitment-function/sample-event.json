@@ -7,5 +7,12 @@
     "queryStringParameters": {
         "name": "World"
     },
-    "body": null
+    "body": {
+        "paymentId": "1d8a3589-d6c5-42ab-b314-7b6bb19d8ebf",
+        "userId": "59c8e513-df01-4380-a481-9d733763a079",
+        "paymentTimestamp": "2021-01-01T00:00:00Z",
+        "description": "Netflix subscription",
+        "currency": "GBP",
+        "amount": "19.99"
+    }
 }
